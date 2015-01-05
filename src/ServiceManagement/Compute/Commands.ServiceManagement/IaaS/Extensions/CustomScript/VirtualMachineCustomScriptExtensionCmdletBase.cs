@@ -15,6 +15,7 @@
 using Microsoft.Azure.Common.Extensions;
 using Microsoft.WindowsAzure.Commands.Utilities.Common;
 using Newtonsoft.Json;
+using Microsoft.WindowsAzure.Commands.ServiceManagement.Helpers;
 
 namespace Microsoft.WindowsAzure.Commands.ServiceManagement.IaaS.Extensions
 {
@@ -23,6 +24,11 @@ namespace Microsoft.WindowsAzure.Commands.ServiceManagement.IaaS.Extensions
         protected const string VirtualMachineCustomScriptExtensionNoun = "AzureVMCustomScriptExtension";
         protected const string ExtensionDefaultPublisher = "Microsoft.Compute";
         protected const string ExtensionDefaultName = "CustomScriptExtension";
+
+        protected const string VirtualMachineCustomScriptExtensionForLinuxNoun = "AzureVMCustomScriptExtensionForLinux";
+        protected const string ExtensionForLinuxDefaultPublisher = "Microsoft.OSTCExtension";
+        protected const string ExtensionForLinuxDefaultName = "CustomScriptForLinux";
+
         protected const string ExtensionDefaultVersion = "1.*";
 
         public virtual string ContainerName { get; set; }
@@ -36,12 +42,30 @@ namespace Microsoft.WindowsAzure.Commands.ServiceManagement.IaaS.Extensions
 
         public VirtualMachineCustomScriptExtensionCmdletBase()
         {
-            base.publisherName = ExtensionDefaultPublisher;
-            base.extensionName = ExtensionDefaultName;
+            base.publisherName = string.Equals(VM.GetInstance().OSVirtualHardDisk.OS, OS.Windows)
+                               ? ExtensionDefaultPublisher
+                               : ExtensionForLinuxDefaultPublisher;
+            base.extensionName = string.Equals(VM.GetInstance().OSVirtualHardDisk.OS, OS.Windows)
+                               ? ExtensionDefaultName
+                               : ExtensionForLinuxDefaultName;
         }
 
         protected string GetPublicConfiguration()
         {
+            if (string.Equals(VM.GetInstance().OSVirtualHardDisk.OS, OS.Linux))
+            {
+                const string cmdFormatStr = "./{0} {1}";
+                const string inlineCmdFormatStr = "{0} {1}";
+                return JsonUtilities.TryFormatJson(JsonConvert.SerializeObject(
+                    new PublicSettings
+                    {
+                        fileUris = this.FileUri,
+                        commandToExecute = this.FileUri.Length == 0
+                                         ? string.Format(inlineCmdFormatStr, this.Run, this.Argument)
+                                         : string.Format(cmdFormatStr, this.Run, this.Argument)
+                    }));
+            }
+
             const string poshCmdFormatStr = "powershell {0} -file {1} {2}";
             const string defaultPolicyStr = "Unrestricted";
             const string policyFormatStr = "-ExecutionPolicy {0}";
